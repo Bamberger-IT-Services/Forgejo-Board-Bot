@@ -1,0 +1,78 @@
+# Prüfungen bei jedem PR und Push auf develop/main (Forgejo liest .github/workflows, wenn es kein
+# .forgejo/workflows gibt). Öffentliches Repository: läuft auf „ubuntu-latest“, nie auf einem
+# selbst gehosteten Runner mit Zugang zum internen Netz – sonst liefe Code aus fremden PRs dort.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Syntax
+        run: for f in src/*.js test/*.js; do node --check "$f"; done
+      - name: Tests
+        run: node --test --experimental-test-coverage test/*.test.js
+      - name: Keine npm-Abhängigkeiten
+        run: |
+          ! grep -qE '"(dev)?[dD]ependencies"' package.json
+
+  oeffentlich:
+    # Öffentliches Repo: keine privaten Adressen (RFC 1918) und keine .env im Stand.
+    # Beispieladressen stammen aus 192.0.2.0/24 (RFC 5737).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keine privaten Adressen
+        run: |
+          ! git grep -nIE '(^|[^0-9.])(10\.[0-9]{1,3}|192\.168|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]{1,3}(\.[0-9]{1,3})?([^0-9]|$)' -- . ':!.github/workflows/ci.yml'
+      - name: Keine .env
+        run: |
+          ! git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '^\.env\.beispiel$'
+
+  geheimnisse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        env:
+          BASIS: ${{ github.event.pull_request.base.sha }}
+        run: |
+          bereich="${BASIS:+--log-opts=$BASIS..HEAD}"
+          # shellcheck disable=SC2086
+          docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.28.0 git $bereich --redact --no-banner
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image baut und bricht ohne Konfiguration sauber ab
+        run: |
+          docker build -t forgejo-board-bot:ci .
+          set +e
+          docker run --rm forgejo-board-bot:ci > ausgabe.txt 2>&1
+          code=$?
+          set -e
+          cat ausgabe.txt
+          [ "$code" = 2 ] && grep -q 'Konfiguration unvollständig' ausgabe.txt
