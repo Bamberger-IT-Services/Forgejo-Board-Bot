@@ -32,7 +32,7 @@ const attribut = (tag, name) => {
 
 // Offene Projekte eines Repos aus /{org}/{repo}/projects?state=open, in Seitenreihenfolge.
 export function projekteLesen(html, basis) {
-  const muster = new RegExp(`<a\\b[^>]*\\shref="${regexSicher(basis)}/projects/(\\d+)"[^>]*>([\\s\\S]*?)</a>`, 'g');
+  const muster = new RegExp(`<a\\b[^>]*\\shref="${regexSicher(basis)}/projects/(\\d+)"[^>]*>([\\s\\S]*?)</a>`, 'gi');
   const gesehen = new Set();
   const projekte = [];
   for (const m of html.matchAll(muster)) {

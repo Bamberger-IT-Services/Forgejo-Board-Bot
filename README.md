@@ -37,8 +37,14 @@ dieselben Aufrufe wie die Weboberfläche.
 | Geschlossen | `geschlossen`, `done`, `erledigt`, `fertig` |
 
 Fehlt die Zielspalte, verschiebt der Bot nichts und schreibt eine Warnung ins Protokoll.
-Hat ein Repo mehrere offene Projekte, nimmt er das erste der Projektliste. Repos ohne offenes
-Projekt, archivierte Repos und Repos mit abgeschalteten Projekten übergeht er.
+Hat ein Repo mehrere offene Projekte, pflegt er das erste der Projektliste. Ein Issue steht in
+Forgejo in höchstens einem Projekt: Issues, die schon in einem anderen offenen oder geschlossenen
+Projekt des Repos stehen, lässt der Bot dort (anders als `forgejoBoard.abgleich`). Repos ohne
+offenes Projekt, archivierte Repos und Repos mit abgeschalteten Projekten übergeht er.
+
+Bei jedem Webhook liest der Bot den aktuellen Zustand des Issues neu; ein verspätetes
+„geschlossen“ verschiebt also kein inzwischen wieder geöffnetes Issue. Ist der Selbsttest rot,
+schreibt der Bot nichts.
 
 Alles Schreibende läuft nacheinander durch eine Warteschlange, und jeder Schritt prüft erst, ob
 er nötig ist. Der Bot darf also beliebig oft laufen (idempotent). Hintergrund der Regeln:
@@ -111,7 +117,8 @@ starten.
 
 ## Betrieb
 
-- **Zustand:** `GET /health` → 200 und `"ok": true`, sonst 503 mit Grund. Der Container hat
+- **Zustand:** `GET /health` → 200 und `"ok": true`, sonst 503 mit der Meldung des Selbsttests
+  (Einzelheiten im Protokoll). Der Container hat
   einen Healthcheck darauf (`docker ps` zeigt `healthy`).
 - **Protokoll:** `docker compose logs --since 1h`. Eine JSON-Zeile je Eintrag; Passwort, Token
   und Secret werden vor der Ausgabe geschwärzt.
@@ -172,5 +179,6 @@ Projekt-Board). Verpasste Änderungen holt der nächste Abgleich nach, sobald de
 
 ## Entwicklung
 
-Regeln für Beiträge und Aufbau des Codes: [`CLAUDE.md`](CLAUDE.md). Änderungen:
+Regeln für Beiträge und Aufbau des Codes: [`CLAUDE.md`](CLAUDE.md). Die CI prüft nur PRs aus
+diesem Repo; PRs aus Forks laufen dort nicht, weil Forgejo-Runner selbst gehostet sind. Änderungen:
 [`CHANGELOG.md`](CHANGELOG.md).

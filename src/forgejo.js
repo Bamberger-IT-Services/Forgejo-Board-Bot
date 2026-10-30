@@ -106,7 +106,9 @@ export class Forgejo {
   async seite(pfad) {
     await this.angemeldetSein();
     let antwort = await this.web(pfad);
-    if (Forgejo.zurAnmeldung(antwort)) {
+    // Private Repos antworten ohne gültige Sitzung mit 404 statt mit einer Umleitung.
+    if (Forgejo.zurAnmeldung(antwort) || antwort.status === 404) {
+      await antwort.arrayBuffer().catch(() => {});
       await this.anmelden();
       antwort = await this.web(pfad);
     }
@@ -118,13 +120,16 @@ export class Forgejo {
   async senden(pfad, inhalt) {
     await this.angemeldetSein();
     let antwort = await this.web(pfad, { methode: 'POST', ...inhalt });
-    if (Forgejo.zurAnmeldung(antwort) || antwort.status === 403) {
+    if (Forgejo.zurAnmeldung(antwort) || antwort.status === 403 || antwort.status === 404) {
       await antwort.arrayBuffer().catch(() => {});
       await this.anmelden();
       antwort = await this.web(pfad, { methode: 'POST', ...inhalt });
     }
     const text = await antwort.text();
-    if (antwort.status !== 200) throw new ForgejoFehler(`${pfad}: HTTP ${antwort.status} ${text.slice(0, 200)}`, antwort.status);
+    if (antwort.status === 403 || antwort.status === 404) {
+      throw new ForgejoFehler(`${pfad}: HTTP ${antwort.status} – hat das Bot-Konto Schreibrecht auf das Repo (Team)?`, antwort.status);
+    }
+    if (antwort.status !== 200) throw new ForgejoFehler(`${pfad}: HTTP ${antwort.status}`, antwort.status);
     return text;
   }
 

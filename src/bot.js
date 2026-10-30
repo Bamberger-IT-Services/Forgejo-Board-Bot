@@ -24,21 +24,25 @@ export class Bot {
     return lauf;
   }
 
-  // Ein Auftrag aus dem Webhook. Fehlt das Issue (PR-Verweis), wird es per API nachgelesen.
+  // Ein Auftrag aus dem Webhook. Bei rotem Selbsttest wird nichts geschrieben.
   auftrag(a) {
     return this.einreihen(async () => {
       const kurz = { repo: a.repo, nummer: a.nummer, regel: a.regel, lieferung: a.lieferung };
+      if (!this.zustand.selbsttest.ok) {
+        log.warnung('Selbsttest rot – Auftrag übersprungen, der Abgleich holt ihn nach', kurz);
+        return 'uebersprungen';
+      }
       try {
-        let issue = a.issue;
-        if (!issue) {
-          const roh = await this.board.forgejo.api(`/repos/${this.board.org}/${encodeURIComponent(a.repo)}/issues/${a.nummer}`);
-          if (roh.pull_request) {
-            log.info('Verweis zeigt auf einen PR, nicht auf ein Issue – übersprungen', kurz);
-            return 'unveraendert';
-          }
-          issue = { id: roh.id, number: roh.number, state: roh.state };
+        // Zustand immer frisch lesen: Zustellungen können verspätet oder doppelt kommen.
+        const roh = await this.board.forgejo.api(`/repos/${this.board.org}/${encodeURIComponent(a.repo)}/issues/${a.nummer}`);
+        if (roh.pull_request) {
+          log.info('Nummer gehört zu einem PR, nicht zu einem Issue – übersprungen', kurz);
+          return 'unveraendert';
         }
-        const ergebnis = await this.board.anwenden(a.repo, issue, a.regel);
+        const issue = { id: roh.id, number: roh.number, state: roh.state };
+        // Geöffnet/geschlossen folgt dem aktuellen Zustand, nicht dem Ereignis.
+        const regel = a.regel === 'review' ? 'review' : issue.state === 'closed' ? 'fertig' : 'offen';
+        const ergebnis = await this.board.anwenden(a.repo, issue, regel);
         this.zustand.auftraege.erledigt++;
         return ergebnis;
       } catch (err) {
@@ -53,7 +57,7 @@ export class Bot {
     return this.einreihen(async () => {
       try {
         const e = await this.board.selbsttest(this.selbsttestRepo);
-        this.zustand.selbsttest = { ok: true, zeit: new Date().toISOString(), ...e };
+        this.zustand.selbsttest = { ok: true, zeit: new Date().toISOString() };
         log.info('Selbsttest bestanden', e);
       } catch (err) {
         this.zustand.selbsttest = { ok: false, zeit: new Date().toISOString(), fehler: err.message };
@@ -71,13 +75,15 @@ export class Bot {
         this.zustand.abgleich = { zeit: new Date().toISOString(), ok: e.fehler === 0, ...e, dauerMs: Date.now() - beginn };
         log.info('Abgleich fertig', this.zustand.abgleich);
       } catch (err) {
-        this.zustand.abgleich = { zeit: new Date().toISOString(), ok: false, repos: 0, fehler: 1, meldung: err.message };
+        this.zustand.abgleich = { zeit: new Date().toISOString(), ok: false, repos: 0, fehler: 1 };
         log.fehler('Abgleich fehlgeschlagen', { fehler: err.message });
       }
     });
   }
 
   // Für /health: rot, wenn der Selbsttest fehlschlägt oder der letzte Abgleich Fehler hatte.
+  // Ohne Anmeldung erreichbar, darum nur Zustand, Zeiten, Zähler und die Meldung des Selbsttests –
+  // keine Repo- oder Projektnamen, Einzelheiten stehen im Protokoll.
   gesundheit() {
     const { selbsttest, abgleich, auftraege } = this.zustand;
     const ok = selbsttest.ok && abgleich.ok !== false;

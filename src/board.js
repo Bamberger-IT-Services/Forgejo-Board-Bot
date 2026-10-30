@@ -21,16 +21,27 @@ export class Board {
   }
 
   // Erstes offenes Projekt des Repos mit Spalten und Karten, oder undefined.
+  // „anderswo“: Issues, die in einem anderen (offenen oder geschlossenen) Projekt des Repos stehen.
+  // Forgejo kennt je Issue nur ein Projekt; der Bot hängt solche Issues nicht um (ADR-0003).
   async projektLesen(repo) {
     const basis = this.basis(repo);
-    const liste = await this.forgejo.seite(`${basis}/projects?state=open`);
-    const projekt = projekteLesen(liste, basis)[0];
+    const offen = projekteLesen(await this.forgejo.seite(`${basis}/projects?state=open`), basis);
+    const projekt = offen[0];
     if (!projekt) return undefined;
     const seite = await this.forgejo.seite(`${basis}/projects/${projekt.id}`);
     const spalten = spaltenLesen(seite).map((s) => ({ ...s, url: `${basis}/projects/${projekt.id}/${s.id}` }));
     const ort = new Map();
     for (const s of spalten) for (const k of s.karten) ort.set(k, s);
-    return { repo, basis, projekt, spalten, ort };
+
+    const geschlossen = projekteLesen(await this.forgejo.seite(`${basis}/projects?state=closed`), basis);
+    const anderswo = new Set();
+    for (const andere of [...offen.slice(1), ...geschlossen]) {
+      if (andere.id === projekt.id) continue;
+      for (const s of spaltenLesen(await this.forgejo.seite(`${basis}/projects/${andere.id}`))) {
+        for (const k of s.karten) if (!ort.has(k)) anderswo.add(k);
+      }
+    }
+    return { repo, basis, projekt, spalten, ort, anderswo };
   }
 
   async zuordnen(p, ids) {
@@ -71,6 +82,10 @@ export class Board {
       log.info('Issue ist geschlossen – Review-Spalte übersprungen', kurz);
       return 'unveraendert';
     }
+    if (!aktuell && p.anderswo.has(issue.id)) {
+      log.info('Issue steht in einem anderen Projekt des Repos – bleibt dort', { ...kurz, projekt: p.projekt.name });
+      return 'anderes-projekt';
+    }
     if (!aktuell) {
       if (eben) throw new Error(`#${issue.number}: nach dem Zuordnen nicht im Projekt „${p.projekt.name}“`);
       await this.zuordnen(p, [issue.id]);
@@ -99,7 +114,7 @@ export class Board {
     let p = await this.projektLesen(repo);
     if (!p) return undefined;
     const issues = await this.issuesLesen(repo);
-    const fehlend = issues.filter((i) => !p.ort.has(i.id));
+    const fehlend = issues.filter((i) => !p.ort.has(i.id) && !p.anderswo.has(i.id));
     if (fehlend.length) {
       await this.zuordnen(p, fehlend.map((i) => i.id));
       p = await this.projektLesen(repo);
@@ -107,9 +122,14 @@ export class Board {
     }
     const fertig = spalteFinden(p.spalten, 'fertig');
     const backlog = spalteFinden(p.spalten, 'backlog');
-    const neuOffen = backlog ? fehlend.filter((i) => i.state === 'open' && p.ort.get(i.id) !== backlog) : [];
-    const zuFertig = fertig ? issues.filter((i) => i.state === 'closed' && p.ort.get(i.id) !== fertig) : [];
-    const wiederOffen = backlog && fertig ? issues.filter((i) => i.state === 'open' && p.ort.get(i.id) === fertig) : [];
+    // Nur Karten verschieben, die jetzt wirklich im Projekt stehen; ein einziges fehlendes Issue
+    // ließe sonst den ganzen Aufruf scheitern.
+    const nichtDa = fehlend.filter((i) => !p.ort.has(i.id));
+    if (nichtDa.length) log.warnung(`Abgleich ${repo}: nach dem Zuordnen nicht im Projekt`, { repo, nummern: nichtDa.map((i) => i.number) });
+    const imProjekt = issues.filter((i) => p.ort.has(i.id));
+    const neuOffen = backlog ? fehlend.filter((i) => i.state === 'open' && p.ort.has(i.id) && p.ort.get(i.id) !== backlog) : [];
+    const zuFertig = fertig ? imProjekt.filter((i) => i.state === 'closed' && p.ort.get(i.id) !== fertig) : [];
+    const wiederOffen = backlog && fertig ? imProjekt.filter((i) => i.state === 'open' && p.ort.get(i.id) === fertig) : [];
     if (backlog) await this.verschieben(p, backlog, [...new Set([...neuOffen, ...wiederOffen].map((i) => i.id))]);
     if (fertig) await this.verschieben(p, fertig, zuFertig.map((i) => i.id));
 
@@ -152,6 +172,9 @@ export class Board {
   // Anmeldung, Projektseite lesen, erwartete Seitenelemente prüfen. Wirft mit klarer Meldung.
   async selbsttest(repoVorgabe) {
     await this.forgejo.anmelden();
+    // Schreibweise der Organisation wie in Forgejo (für Adressen und den Vergleich mit Links).
+    const org = await this.forgejo.api(`/orgs/${encodeURIComponent(this.org)}`);
+    if (org?.username && gueltigerName(org.username)) this.org = org.username;
     const kandidaten = repoVorgabe ? [repoVorgabe] : await this.reposLesen();
     for (const repo of kandidaten) {
       const p = await this.projektLesen(repo);

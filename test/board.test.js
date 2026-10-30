@@ -83,6 +83,7 @@ test('Repo ohne offenes Projekt: nichts zu tun', async () => {
 test('Webhook-Auftrag mit PR-Verweis liest das Issue nach und überspringt PRs', async () => {
   repo.issues.push({ id: 1009, number: 9, state: 'open', pull_request: {} });
   const { bot } = aufbau({ demo: repo });
+  assert.equal(await bot.selbsttest(), true);
   assert.equal(await bot.auftrag({ repo: 'demo', nummer: 2, regel: 'review' }), 'verschoben');
   assert.deepEqual(karten(repo)['To review'], [1002]);
   // „Closes #9“, aber #9 ist selbst ein PR: nicht anfassen. Unbekannte Nummer: Fehler im Log, kein Absturz.
@@ -158,4 +159,29 @@ test('Bot: /health rot nach fehlgeschlagenem Selbsttest, grün danach', async ()
   const g = bot.gesundheit();
   assert.equal(g.ok, true);
   assert.equal(g.abgleich.repos, 1);
+});
+
+test('verspätetes „geschlossen“ für ein inzwischen wieder geöffnetes Issue: Zustand frisch, Karte nach Backlog', async () => {
+  repo.projekte[0].spalten[4].karten.push(1001);
+  const { bot } = aufbau({ demo: repo });
+  await bot.selbsttest();
+  assert.equal(await bot.auftrag({ repo: 'demo', nummer: 1, regel: 'fertig' }), 'verschoben');
+  assert.deepEqual(karten(repo).Backlog, [1001]);
+});
+
+test('Selbsttest rot: Webhook-Aufträge schreiben nichts', async () => {
+  const { a, bot } = aufbau({ demo: repo });
+  assert.equal(await bot.auftrag({ repo: 'demo', nummer: 1, regel: 'offen' }), 'uebersprungen');
+  assert.equal(a.zustand.anfragen.length, 0);
+});
+
+test('Issues in einem anderen (auch geschlossenen) Projekt werden nicht umgehängt', async () => {
+  repo.projekte.push({ id: '3', name: 'Alt', geschlossen: true, spalten: [{ id: '31', titel: 'Done', karten: [1003] }] });
+  repo.projekte.push({ id: '5', name: 'Zweites', spalten: [{ id: '51', titel: 'Backlog', karten: [1002] }] });
+  const { board } = aufbau({ demo: repo });
+  assert.equal(await board.anwenden('demo', zu(3), 'fertig'), 'anderes-projekt');
+  const e = await board.abgleichRepo('demo');
+  assert.deepEqual(e.neuImProjekt, [1]);
+  assert.deepEqual(repo.projekte[1].spalten[0].karten, [1003]);
+  assert.deepEqual(repo.projekte[2].spalten[0].karten, [1002]);
 });

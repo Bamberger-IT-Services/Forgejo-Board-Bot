@@ -36,7 +36,7 @@ const LOGIN = `<form class="ui form" action="/user/login" method="post">
   <input id="password" name="password" type="password" value="">
   <input name="remember" type="checkbox"></form>`;
 
-// repos: { name: { projekte: [{id,name,spalten:[{id,titel,karten:[]}]}], issues: [{id,number,state,pull_request?}] } }
+// repos: { name: { projekte: [{id,name,geschlossen?,spalten:[{id,titel,karten:[]}]}], issues: [{id,number,state,pull_request?}] } }
 export function attrappe({ repos, benutzer = 'bot', passwort = 'testpasswort', standardspalte = 0 } = {}) {
   const zustand = { repos, sitzungen: new Set(), anfragen: [], anmeldungen: 0, sitzungAblaufen: false };
   let zaehler = 0;
@@ -66,6 +66,7 @@ export function attrappe({ repos, benutzer = 'bot', passwort = 'testpasswort', s
       const erwartet = `Basic ${Buffer.from(`${benutzer}:${passwort}`).toString('base64')}`;
       if (auth !== erwartet) return antwort(401, '{}');
       let m;
+      if (/^\/api\/v1\/orgs\/[^/]+$/.test(pfad)) return antwort(200, JSON.stringify({ username: ORG }));
       if ((m = /^\/api\/v1\/orgs\/[^/]+\/repos$/.exec(pfad))) {
         const seite = Number(u.searchParams.get('page'));
         const liste = seite === 1 ? Object.keys(repos).map((name) => ({ name, archived: false, has_projects: true })) : [];
@@ -105,7 +106,10 @@ export function attrappe({ repos, benutzer = 'bot', passwort = 'testpasswort', s
 
     if (methode === 'GET') {
       if (!sitzung(init)) return antwort(303, '', { location: '/user/login' });
-      if (rest === 'projects' && u.searchParams.get('state') === 'open') return antwort(200, projektListe(basis, repos[repo].projekte));
+      if (rest === 'projects') {
+        const zu = u.searchParams.get('state') === 'closed';
+        return antwort(200, projektListe(basis, repos[repo].projekte.filter((p) => !!p.geschlossen === zu)));
+      }
       const p = /^projects\/(\d+)$/.exec(rest);
       if (p && projektVon(repo, p[1])) {
         const projekt = projektVon(repo, p[1]);

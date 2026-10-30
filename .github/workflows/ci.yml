@@ -1,6 +1,8 @@
 # Prüfungen bei jedem PR und Push auf develop/main (Forgejo liest .github/workflows, wenn es kein
-# .forgejo/workflows gibt). Öffentliches Repository: läuft auf „ubuntu-latest“, nie auf einem
-# selbst gehosteten Runner mit Zugang zum internen Netz – sonst liefe Code aus fremden PRs dort.
+# .forgejo/workflows gibt). Achtung: Auf Forgejo ist jeder Runner selbst gehostet, „ubuntu-latest“
+# ist nur ein Label. Damit kein Code aus fremden PRs auf dem Runner läuft, prüft jeder Job bei
+# pull_request, dass der PR aus diesem Repo kommt (kein Fork). PRs aus Forks prüft ein Mitglied
+# lokal und übernimmt sie auf einen eigenen Branch.
 name: CI
 
 on:
@@ -19,6 +21,7 @@ concurrency:
 
 jobs:
   tests:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -39,6 +42,7 @@ jobs:
   oeffentlich:
     # Öffentliches Repo: keine privaten Adressen (RFC 1918) und keine .env im Stand.
     # Beispieladressen stammen aus 192.0.2.0/24 (RFC 5737).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +54,7 @@ jobs:
           ! git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '^\.env\.beispiel$'
 
   geheimnisse:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +69,7 @@ jobs:
           docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.28.0 git $bereich --redact --no-banner
 
   image:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

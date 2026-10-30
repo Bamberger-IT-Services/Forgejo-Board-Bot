@@ -7,11 +7,9 @@ const repo = { name: 'demo', owner: { login: ORG } };
 const issue = (action, extra = {}) => ({ action, repository: repo, issue: { id: 501, number: 5, ...extra } });
 
 test('Issue geöffnet / wieder geöffnet → Backlog-Regel, geschlossen → fertig', () => {
-  assert.deepEqual(auftraegeFuer('issues', issue('opened'), ORG).auftraege,
-    [{ repo: 'demo', nummer: 5, regel: 'offen', issue: { id: 501, number: 5, state: 'open' } }]);
+  assert.deepEqual(auftraegeFuer('issues', issue('opened'), ORG).auftraege, [{ repo: 'demo', nummer: 5, regel: 'offen' }]);
   assert.equal(auftraegeFuer('issues', issue('reopened'), ORG).auftraege[0].regel, 'offen');
-  assert.deepEqual(auftraegeFuer('issues', issue('closed'), ORG).auftraege[0],
-    { repo: 'demo', nummer: 5, regel: 'fertig', issue: { id: 501, number: 5, state: 'closed' } });
+  assert.deepEqual(auftraegeFuer('issues', issue('closed'), ORG).auftraege[0], { repo: 'demo', nummer: 5, regel: 'fertig' });
 });
 
 test('andere Issue-Aktionen, PR-Issues und fremde Organisationen werden ignoriert', () => {

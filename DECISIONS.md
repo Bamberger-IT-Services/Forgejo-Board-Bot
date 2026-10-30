@@ -40,6 +40,12 @@ verweist auf die neue.
   „Geschlossen“ verschiebt immer. „PR geöffnet“ verschiebt nur offene Issues, und nur wenn es
   eine Review-Spalte gibt. Der Abgleich verhält sich wie `forgejoBoard.abgleich`, legt fehlende
   offene Issues zusätzlich nach Backlog.
+- **Andere Projekte:** Anders als das Browser-Skript hängt der Bot Issues, die schon in einem
+  anderen offenen oder geschlossenen Projekt des Repos stehen, nicht um. Er läuft automatisch und
+  in allen Repos; alte Projekte und ein zweites Projekt sollen nicht still geleert werden.
+- **Zustand:** Bei jedem Webhook liest der Bot den aktuellen Zustand des Issues per API und
+  richtet sich danach, nicht nach dem Ereignis (verspätete oder wiederholte Zustellungen).
+  Bei rotem Selbsttest schreibt er nichts.
 - **Folgen:** Alle Aufträge laufen nacheinander durch eine Warteschlange; jeder Schritt prüft
   erst, ob er nötig ist (idempotent).
 

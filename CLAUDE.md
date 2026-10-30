@@ -37,7 +37,8 @@ Beide nutzen dieselben Stichworte für Spalten (`src/spalten.js` ↔ `STICHWORTE
 - **Keine npm-Abhängigkeiten** (ADR-0001). Node.js ≥ 22, Tests mit `node:test`.
 - Der Bot bleibt allgemein: keine festen Spalten- oder Projektnummern, keine Annahmen über eine
   bestimmte Instanz.
-- CI läuft auf `ubuntu-latest`, nie auf einem Runner mit Zugang zum internen Netz.
+- CI: Forgejo-Runner sind selbst gehostet („ubuntu-latest“ ist nur ein Label). Jeder Job läuft bei
+  `pull_request` nur für PRs aus diesem Repo, nie für Forks – diese Bedingung nicht entfernen.
 
 ## Abweichungen von den Anweisungen
 
