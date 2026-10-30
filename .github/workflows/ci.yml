@@ -75,7 +75,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Image baut und bricht ohne Konfiguration sauber ab
         run: |
-          docker build -t forgejo-board-bot:ci .
+          docker build --load -t forgejo-board-bot:ci .
           set +e
           docker run --rm forgejo-board-bot:ci > ausgabe.txt 2>&1
           code=$?
