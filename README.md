@@ -4,7 +4,7 @@ Pflegt die Projekt-Boards einer Forgejo-Organisation automatisch. Forgejo (Stand
 API für Projekte und verschiebt Karten nicht selbst; der Bot erledigt das serverseitig über
 dieselben Aufrufe wie die Weboberfläche.
 
-**Stand:** Version 0.1.0 · 30.10.2026 · getestet mit Forgejo 17.0.1
+**Stand:** Version 0.1.0 · 31.10.2026 · getestet mit Forgejo 17.0.1
 
 - Ein **Webhook der Organisation** meldet neue, geschlossene und wieder geöffnete Issues sowie
   neue Pull Requests; der Bot verschiebt die Karte sofort.
@@ -138,16 +138,18 @@ starten.
 
 ## Update
 
-**Bot:**
+**Bot:** Der Server läuft auf einem Release-Tag (`vX.Y.Z`), nicht auf einem Branch.
 
 ```bash
 cd forgejo-board-bot
-git pull
+git fetch --tags
+git checkout vX.Y.Z                 # neues Release, z. B. v0.1.0
 docker compose up -d --build
 docker compose logs --since 5m      # „Selbsttest bestanden“
 ```
 
-Rückweg: `git checkout <vorheriges-tag>` und erneut `docker compose up -d --build`.
+Rückweg: `git checkout <vorheriges-tag>` und erneut `docker compose up -d --build`. Die `.env`
+bleibt dabei unberührt; ein Release, das neue Einstellungen braucht, sagt es im `CHANGELOG.md`.
 
 **Forgejo:** Nach jedem Forgejo-Update `/health` prüfen. Der Selbsttest merkt, wenn sich die
 Anmeldung oder der Aufbau der Projektseite geändert hat (z. B. „3 Karten angezeigt, 0 erkannt“).
