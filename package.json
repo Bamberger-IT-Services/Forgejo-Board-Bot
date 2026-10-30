@@ -1,0 +1,14 @@
+{
+  "name": "forgejo-board-bot",
+  "version": "0.1.0",
+  "description": "Pflegt Projekt-Boards in Forgejo automatisch: Webhook plus regelmäßiger Abgleich.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test test/*.test.js"
+  }
+}
